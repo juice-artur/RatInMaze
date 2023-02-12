@@ -1,168 +1,152 @@
-﻿#include <iostream>
-#include<queue>
-
+﻿#include <fstream>
 #include <iostream>
+#include <queue>
 #include <random>
-#include <fstream>
 #include <sstream>
 using namespace std;
 
-struct Point
-{
-	int x;
-	int y;
+struct Point {
+  int x;
+  int y;
+  int z;
 };
 
-struct queueNode
-{
-	Point pt;
-	int dist;
+struct queueNode {
+  Point pt;
+  int dist;
 };
 
-
-
-bool isValid(int row, int col, int size)
-{
-	return (row >= 0) && (row < size) &&
-		(col >= 0) && (col < size);
+bool isValid(int row, int col, int z,  int size) {
+  return (row >= 0) && (row < size) && (col >= 0) && (col < size) &&
+         (z >= 0) && (z < size);
 }
 
-int rowNum[] = { -1, 0, 0, 1 };
-int colNum[] = { 0, -1, 1, 0 };
+int rowNum[] = {-1, 0, 0, 1};
+int colNum[] = {0, -1, 1, 0};
+int zNum[] = {1, 0, -1, 0};
+int BFS(vector<vector<vector<int>>> mat, Point src, Point dest, int const size) {
+  if (!mat[src.x][src.y][src.z] || !mat[dest.x][dest.y][dest.z]) return -1;
 
-int BFS(vector<vector<int>> mat, Point src, Point dest, int const size)
-{
-	if (!mat[src.x][src.y] || !mat[dest.x][dest.y])
-		return -1;
+  vector<vector<vector<bool>>> visited;
+  visited.resize(size);
+  for (int i = 0; i < size; i++) {
+    visited[i].resize(size);
+    for (int j = 0; j < size; j++) visited[i][j].resize(size);
+  }
+  visited[src.x][src.y][src.z] = true;
 
-	vector<vector<bool>> visited(size, vector<bool>(size));
+  queue<queueNode> q;
 
+  queueNode s = {src, 0};
+  q.push(s);
 
-	visited[src.x][src.y] = true;
+  while (!q.empty()) {
+    queueNode curr = q.front();
+    Point pt = curr.pt;
 
-	queue<queueNode> q;
+    if (pt.x == dest.x && pt.y == dest.y && pt.z == dest.z) return curr.dist;
 
-	queueNode s = { src, 0 };
-	q.push(s);
+    q.pop();
 
-	while (!q.empty())
-	{
-		queueNode curr = q.front();
-		Point pt = curr.pt;
+    for (int i = 0; i < 4; i++) {
+      int row = pt.x + rowNum[i];
+      int col = pt.y + colNum[i];
+      int z = pt.z + zNum[i];
+      if (isValid(row, col, z, size) && mat[row][col][z] &&
+          !visited[row][col][z]) {
+        visited[row][col][z] = true;
+        queueNode Adjcell = {{row, col, z}, curr.dist + 1};
+        q.push(Adjcell);
+      }
+    }
+  }
 
-		if (pt.x == dest.x && pt.y == dest.y)
-			return curr.dist;
-
-		q.pop();
-
-		for (int i = 0; i < 4; i++)
-		{
-			int row = pt.x + rowNum[i];
-			int col = pt.y + colNum[i];
-
-			if (isValid(row, col, size) && mat[row][col] &&
-				!visited[row][col])
-			{
-				visited[row][col] = true;
-				queueNode Adjcell = { {row, col},
-									  curr.dist + 1 };
-				q.push(Adjcell);
-			}
-		}
-	}
-
-	return -1;
+  return -1;
 }
 
+bool solveMaze(int size, vector<vector<vector<int>>> mat) {
+  std::vector<Point> sources;
+  std::vector<Point> dests;
+  for (int i = 0; i < size; i++) {
+    for (int j = 0; j < size; j++) {
+      sources.push_back({0, i, j});
+      dests.push_back({size - 1, i, j});
+    }
+  }
 
-bool solveMaze(int size, vector<vector<int>> mat) {
+  for (auto i : sources) {
+    for (auto j : dests) {
+      int dist = BFS(mat, i, j, size);
 
-	std::vector<Point> sources;
-	std::vector<Point> dests;
-	for (int i = 0; i < size; i++)
-	{
-		sources.push_back({ 0, i });
-		dests.push_back({ size - 1, i });
-	}
+      if (dist != -1) {
+        return true;
+      }
+    }
+  }
 
-
-	for (auto i : sources)
-	{
-		for (auto j : dests)
-		{
-			int dist = BFS(mat, i, j, size);
-
-			if (dist != -1)
-			{
-				return true;
-			}
-		}
-	}
-
-	return false;
+  return false;
 };
 
-int main()
-{
+int main() {
+  cout << "Enter size: " << endl;
 
-	cout << "Enter size: " << endl;
+  auto a = 0;
 
-	auto a = 0;
+  cin >> a;
 
-	cin >> a;
+  const int size = a;
 
-	const int size = a;
+  int NumberOfLaunches = 0;
 
-	int NumberOfLaunches = 0;
+  std::stringstream fileName("Maze");
 
-	std::stringstream fileName("Maze");
+  fileName << "Maze" << a << "x" << a << ".txt";
 
-	fileName << "Maze" << a << "x" << a << ".txt";
+  ofstream myFile;
 
-	ofstream myFile;
+  myFile.open(fileName.str(), fstream::app);
 
-	myFile.open(fileName.str(), fstream::app);
+  while (NumberOfLaunches < 10000) {
+    int numberAttempts = 0;
 
+    vector<vector<vector<int>>> mat;
+    mat.resize(size);
 
-	while (NumberOfLaunches < 100)
-	{
-		int numberAttempts = 0;
+    for (int i = 0; i < size; i++) {
+      mat[i].resize(size);
+      for (int j = 0; j < size; j++) mat[i][j].resize(size);
+    }
 
-		vector<vector<int>> mat(size, vector<int>(size));
+    for (size_t i = 0; i < a; i++) {
+      for (size_t j = 0; j < a; j++) {
+        for (size_t k = 0; k < a; k++) {
+          mat[i][j][k] = 1;
+        }
+      }
+    }
 
-		for (size_t i = 0; i < a; i++)
-		{
-			for (size_t j = 0; j < a; j++)
-			{
-				mat[i][j] = 1;
-			}
-		}
+    while (solveMaze(size, mat)) {
+      random_device rd;
+      mt19937 gen(rd());
+      uniform_int_distribution<> distr(0, a - 1);
 
+      int i = 0;
+      int j = 0;
+      int k = 0;
 
-		while (solveMaze(size, mat))
-		{
+      do {
+        i = distr(gen);
+        j = distr(gen);
+        k = distr(gen);
+      } while (mat[i][j][k] != 1);
 
-			random_device rd;
-			mt19937 gen(rd());
-			uniform_int_distribution<> distr(0, a - 1);
+      mat[i][j][k] = 0;
 
-			int i = 0;
-			int j = 0;
+      numberAttempts++;
+    }
+    myFile << numberAttempts << '\n';
+    NumberOfLaunches++;
+  }
 
-			do
-			{
-				i = distr(gen);
-				j = distr(gen);
-			} while (mat[i][j] != 1);
-
-			mat[i][j] = 0;
-
-			numberAttempts++;
-		}
-		myFile << numberAttempts << '\n';
-		NumberOfLaunches++;
-	}
-
-	myFile.close();
+  myFile.close();
 }
-
