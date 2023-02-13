@@ -1,5 +1,6 @@
 ﻿#include <fstream>
 #include <iostream>
+#include <mutex>
 #include <queue>
 #include <random>
 #include <sstream>
@@ -16,15 +17,16 @@ struct queueNode {
   int dist;
 };
 
-bool isValid(int row, int col, int z,  int size) {
-  return (row >= 0) && (row < size) && (col >= 0) && (col < size) &&
-         (z >= 0) && (z < size);
+bool isValid(int row, int col, int z, int size) {
+  return (row >= 0) && (row < size) && (col >= 0) && (col < size) && (z >= 0) &&
+         (z < size);
 }
 
 int rowNum[] = {-1, 0, 0, 1};
 int colNum[] = {0, -1, 1, 0};
 int zNum[] = {1, 0, -1, 0};
-int BFS(vector<vector<vector<int>>> mat, Point src, Point dest, int const size) {
+int BFS(vector<vector<vector<int>>> mat, Point src, Point dest,
+        int const size) {
   if (!mat[src.x][src.y][src.z] || !mat[dest.x][dest.y][dest.z]) return -1;
 
   vector<vector<vector<bool>>> visited;
@@ -64,6 +66,7 @@ int BFS(vector<vector<vector<int>>> mat, Point src, Point dest, int const size) 
   return -1;
 }
 
+mutex mtx;
 bool solveMaze(int size, vector<vector<vector<int>>> mat) {
   std::vector<Point> sources;
   std::vector<Point> dests;
@@ -87,6 +90,69 @@ bool solveMaze(int size, vector<vector<vector<int>>> mat) {
   return false;
 };
 
+void writeToFile(std::ofstream &myFile, int data) {
+  mtx.lock();
+
+  myFile << data << endl;
+
+  mtx.unlock();
+}
+
+
+void Launch(int &NumberOfLaunches, const int size, int a,
+            std::ofstream &myFile) {
+  while (NumberOfLaunches < 1000) {
+    int numberAttempts = 0;
+
+    vector<vector<vector<int>>> mat;
+    mat.resize(size);
+
+    for (int i = 0; i < size; i++) {
+      mat[i].resize(size);
+      for (int j = 0; j < size; j++) mat[i][j].resize(size);
+    }
+
+    for (size_t i = 0; i < size; i++) {
+      for (size_t j = 0; j < size; j++) {
+        for (size_t k = 0; k < size; k++) {
+          mat[i][j][k] = 1;
+        }
+      }
+    }
+
+    while (solveMaze(size, mat)) {
+      random_device rd;
+      mt19937 gen(rd());
+      uniform_int_distribution<> distr(0, size - 1);
+
+      int i = 0;
+      int j = 0;
+      int k = 0;
+
+      do {
+        i = distr(gen);
+        j = distr(gen);
+        k = distr(gen);
+      } while (mat[i][j][k] != 1);
+
+      mat[i][j][k] = 0;
+
+      numberAttempts++;
+    }
+
+    writeToFile(myFile, numberAttempts);
+    mtx.lock();
+
+    NumberOfLaunches++;
+
+    mtx.unlock();
+
+  }
+}
+
+
+
+
 int main() {
   cout << "Enter size: " << endl;
 
@@ -106,47 +172,12 @@ int main() {
 
   myFile.open(fileName.str(), fstream::app);
 
-  while (NumberOfLaunches < 10000) {
-    int numberAttempts = 0;
-
-    vector<vector<vector<int>>> mat;
-    mat.resize(size);
-
-    for (int i = 0; i < size; i++) {
-      mat[i].resize(size);
-      for (int j = 0; j < size; j++) mat[i][j].resize(size);
-    }
-
-    for (size_t i = 0; i < a; i++) {
-      for (size_t j = 0; j < a; j++) {
-        for (size_t k = 0; k < a; k++) {
-          mat[i][j][k] = 1;
-        }
-      }
-    }
-
-    while (solveMaze(size, mat)) {
-      random_device rd;
-      mt19937 gen(rd());
-      uniform_int_distribution<> distr(0, a - 1);
-
-      int i = 0;
-      int j = 0;
-      int k = 0;
-
-      do {
-        i = distr(gen);
-        j = distr(gen);
-        k = distr(gen);
-      } while (mat[i][j][k] != 1);
-
-      mat[i][j][k] = 0;
-
-      numberAttempts++;
-    }
-    myFile << numberAttempts << '\n';
-    NumberOfLaunches++;
+  for (int i = 0; i < 100; i++) {
+    thread t1(&Launch, ref(NumberOfLaunches), size, i, ref(myFile));
+    t1.join();
   }
 
   myFile.close();
 }
+
+
