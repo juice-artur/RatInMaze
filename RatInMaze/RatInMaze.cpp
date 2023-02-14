@@ -4,6 +4,9 @@
 #include <queue>
 #include <random>
 #include <sstream>
+#include <array>
+#include <chrono>
+using namespace std::chrono;
 using namespace std;
 
 struct Point {
@@ -99,7 +102,7 @@ void writeToFile(std::ofstream &myFile, int data) {
 }
 
 
-void Launch(int &NumberOfLaunches, const int size, int a,
+void Launch(int &NumberOfLaunches, const int size,
             std::ofstream &myFile) {
   while (NumberOfLaunches < 1000) {
     int numberAttempts = 0;
@@ -170,13 +173,21 @@ int main() {
 
   ofstream myFile;
 
-  myFile.open(fileName.str(), fstream::app);
 
-  for (int i = 0; i < 100; i++) {
-    thread t1(&Launch, ref(NumberOfLaunches), size, i, ref(myFile));
-    t1.join();
+  const unsigned int ntheards =std::thread::hardware_concurrency() / 2; 
+
+  cout << "The program was launched in: " << ntheards << " streams" << endl;
+
+
+  myFile.open(fileName.str(), fstream::app);
+  std::vector<thread> _threads(ntheards);
+  for (auto &t : _threads) {
+    t = thread(&Launch, ref(NumberOfLaunches), size, ref(myFile));
   }
 
+  for (auto &t : _threads) {
+    t.join();
+  }
   myFile.close();
 }
 
