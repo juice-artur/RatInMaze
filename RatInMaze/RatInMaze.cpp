@@ -1,13 +1,10 @@
-﻿#include <fstream>
+﻿#include <array>
+#include <fstream>
 #include <iostream>
 #include <mutex>
 #include <queue>
 #include <random>
 #include <sstream>
-#include <array>
-#include <chrono>
-using namespace std::chrono;
-using namespace std;
 
 struct Point {
   int x;
@@ -15,53 +12,106 @@ struct Point {
   int z;
 };
 
-struct queueNode {
-  Point pt;
-  int dist;
+struct QueueNode {
+  Point Point;
+  int Dist;
 };
 
-bool isValid(int row, int col, int z, int size) {
-  return (row >= 0) && (row < size) && (col >= 0) && (col < size) && (z >= 0) &&
-         (z < size);
+const int RowNum[] = {-1, 0, 0, 1};
+const int ColumnNum[] = {0, -1, 1, 0};
+const int LayersNum[] = {1, 0, -1, 0};
+
+std::mutex WriteMutex;
+
+bool IsValid(int Row, int Column, int Layer, int Size);
+
+int BFS(std::vector<std::vector<std::vector<int>>> Maze, Point Src, Point Dest,
+        int const size);
+
+bool SolveMaze(int Size, std::vector<std::vector<std::vector<int>>> Maze);
+
+void WriteToFile(std::ofstream &File, int Data);
+
+void CalculateRejections(int &NumberOfLaunches, const int Size,
+                         std::ofstream &File);
+
+int main() {
+  std::cout << "Enter size: " << std::endl;
+
+  int InputSize = 0;
+
+  std::cin >> InputSize;
+
+  const int Size = InputSize;
+
+  int NumberOfLaunches = 0;
+
+  std::stringstream FileName("Maze");
+
+  FileName << "Maze" << InputSize << "x" << InputSize << "x" << InputSize
+           << ".txt";
+
+  std::ofstream File;
+
+  // If we use half of the available threads
+  // on the processor, we get the highest productivity
+  const unsigned int NumberTheards = std::thread::hardware_concurrency() / 2;
+
+  std::cout << "The program was launched in: " << NumberTheards << " streams"
+            << std::endl;
+
+  File.open(FileName.str(), std::fstream::app);
+  std::vector<std::thread> Theards(NumberTheards);
+  for (auto &t : Theards) {
+    t = std::thread(&CalculateRejections, std::ref(NumberOfLaunches), Size,
+                    std::ref(File));
+  }
+
+  for (auto &t : Theards) {
+    t.join();
+  }
+  File.close();
 }
 
-int rowNum[] = {-1, 0, 0, 1};
-int colNum[] = {0, -1, 1, 0};
-int zNum[] = {1, 0, -1, 0};
-int BFS(vector<vector<vector<int>>> mat, Point src, Point dest,
+bool IsValid(int Row, int Column, int Layer, int Size) {
+  return (Row >= 0) && (Row < Size) && (Column >= 0) && (Column < Size) &&
+         (Layer >= 0) && (Layer < Size);
+}
+
+int BFS(std::vector<std::vector<std::vector<int>>> Maze, Point Src, Point Dest,
         int const size) {
-  if (!mat[src.x][src.y][src.z] || !mat[dest.x][dest.y][dest.z]) return -1;
+  if (!Maze[Src.x][Src.y][Src.z] || !Maze[Dest.x][Dest.y][Dest.z]) return -1;
 
-  vector<vector<vector<bool>>> visited;
-  visited.resize(size);
+  std::vector<std::vector<std::vector<bool>>> Visited;
+  Visited.resize(size);
   for (int i = 0; i < size; i++) {
-    visited[i].resize(size);
-    for (int j = 0; j < size; j++) visited[i][j].resize(size);
+    Visited[i].resize(size);
+    for (int j = 0; j < size; j++) Visited[i][j].resize(size);
   }
-  visited[src.x][src.y][src.z] = true;
+  Visited[Src.x][Src.y][Src.z] = true;
 
-  queue<queueNode> q;
+  std::queue<QueueNode> Queue;
 
-  queueNode s = {src, 0};
-  q.push(s);
+  QueueNode s = {Src, 0};
+  Queue.push(s);
 
-  while (!q.empty()) {
-    queueNode curr = q.front();
-    Point pt = curr.pt;
+  while (!Queue.empty()) {
+    QueueNode Current = Queue.front();
+    Point pt = Current.Point;
 
-    if (pt.x == dest.x && pt.y == dest.y && pt.z == dest.z) return curr.dist;
+    if (pt.x == Dest.x && pt.y == Dest.y && pt.z == Dest.z) return Current.Dist;
 
-    q.pop();
+    Queue.pop();
 
     for (int i = 0; i < 4; i++) {
-      int row = pt.x + rowNum[i];
-      int col = pt.y + colNum[i];
-      int z = pt.z + zNum[i];
-      if (isValid(row, col, z, size) && mat[row][col][z] &&
-          !visited[row][col][z]) {
-        visited[row][col][z] = true;
-        queueNode Adjcell = {{row, col, z}, curr.dist + 1};
-        q.push(Adjcell);
+      int Row = pt.x + RowNum[i];
+      int Column = pt.y + ColumnNum[i];
+      int Layer = pt.z + LayersNum[i];
+      if (IsValid(Row, Column, Layer, size) && Maze[Row][Column][Layer] &&
+          !Visited[Row][Column][Layer]) {
+        Visited[Row][Column][Layer] = true;
+        QueueNode Adjcell = {{Row, Column, Layer}, Current.Dist + 1};
+        Queue.push(Adjcell);
       }
     }
   }
@@ -69,22 +119,20 @@ int BFS(vector<vector<vector<int>>> mat, Point src, Point dest,
   return -1;
 }
 
-mutex mtx;
-bool solveMaze(int size, vector<vector<vector<int>>> mat) {
-  std::vector<Point> sources;
-  std::vector<Point> dests;
-  for (int i = 0; i < size; i++) {
-    for (int j = 0; j < size; j++) {
-      sources.push_back({0, i, j});
-      dests.push_back({size - 1, i, j});
+bool SolveMaze(int Size, std::vector<std::vector<std::vector<int>>> Maze) {
+  std::vector<Point> Sources;
+  std::vector<Point> Dests;
+  for (int i = 0; i < Size; i++) {
+    for (int j = 0; j < Size; j++) {
+      Sources.push_back({0, i, j});
+      Dests.push_back({Size - 1, i, j});
     }
   }
 
-  for (auto i : sources) {
-    for (auto j : dests) {
-      int dist = BFS(mat, i, j, size);
-
-      if (dist != -1) {
+  for (auto i : Sources) {
+    for (auto j : Dests) {
+      int Dist = BFS(Maze, i, j, Size);
+      if (Dist != -1) {
         return true;
       }
     }
@@ -93,102 +141,55 @@ bool solveMaze(int size, vector<vector<vector<int>>> mat) {
   return false;
 };
 
-void writeToFile(std::ofstream &myFile, int data) {
-  mtx.lock();
-
-  myFile << data << endl;
-
-  mtx.unlock();
+void WriteToFile(std::ofstream &File, int Data) {
+  WriteMutex.lock();
+  File << Data << std::endl;
+  WriteMutex.unlock();
 }
 
-
-void Launch(int &NumberOfLaunches, const int size,
-            std::ofstream &myFile) {
+void CalculateRejections(int &NumberOfLaunches, const int Size,
+                         std::ofstream &File) {
   while (NumberOfLaunches < 1000) {
-    int numberAttempts = 0;
+    int NumberAttempts = 0;
 
-    vector<vector<vector<int>>> mat;
-    mat.resize(size);
+    std::vector<std::vector<std::vector<int>>> Maze;
+    Maze.resize(Size);
 
-    for (int i = 0; i < size; i++) {
-      mat[i].resize(size);
-      for (int j = 0; j < size; j++) mat[i][j].resize(size);
+    for (int i = 0; i < Size; i++) {
+      Maze[i].resize(Size);
+      for (int j = 0; j < Size; j++) Maze[i][j].resize(Size);
     }
 
-    for (size_t i = 0; i < size; i++) {
-      for (size_t j = 0; j < size; j++) {
-        for (size_t k = 0; k < size; k++) {
-          mat[i][j][k] = 1;
+    for (size_t i = 0; i < Size; i++) {
+      for (size_t j = 0; j < Size; j++) {
+        for (size_t k = 0; k < Size; k++) {
+          Maze[i][j][k] = 1;
         }
       }
     }
 
-    while (solveMaze(size, mat)) {
-      random_device rd;
-      mt19937 gen(rd());
-      uniform_int_distribution<> distr(0, size - 1);
+    while (SolveMaze(Size, Maze)) {
+      std::random_device RandomDevice;
+      std::mt19937 Gen(RandomDevice());
+      std::uniform_int_distribution<> Distribution(0, Size - 1);
 
       int i = 0;
       int j = 0;
       int k = 0;
 
       do {
-        i = distr(gen);
-        j = distr(gen);
-        k = distr(gen);
-      } while (mat[i][j][k] != 1);
+        i = Distribution(Gen);
+        j = Distribution(Gen);
+        k = Distribution(Gen);
+      } while (Maze[i][j][k] != 1);
 
-      mat[i][j][k] = 0;
-
-      numberAttempts++;
+      Maze[i][j][k] = 0;
+      NumberAttempts++;
     }
 
-    writeToFile(myFile, numberAttempts);
-    mtx.lock();
-
+    WriteToFile(File, NumberAttempts);
+    WriteMutex.lock();
     NumberOfLaunches++;
-
-    mtx.unlock();
-
+    WriteMutex.unlock();
   }
 }
-
-
-
-
-int main() {
-  cout << "Enter size: " << endl;
-
-  auto a = 0;
-
-  cin >> a;
-
-  const int size = a;
-
-  int NumberOfLaunches = 0;
-
-  std::stringstream fileName("Maze");
-
-  fileName << "Maze" << a << "x" << a << ".txt";
-
-  ofstream myFile;
-
-
-  const unsigned int ntheards =std::thread::hardware_concurrency() / 2; 
-
-  cout << "The program was launched in: " << ntheards << " streams" << endl;
-
-
-  myFile.open(fileName.str(), fstream::app);
-  std::vector<thread> _threads(ntheards);
-  for (auto &t : _threads) {
-    t = thread(&Launch, ref(NumberOfLaunches), size, ref(myFile));
-  }
-
-  for (auto &t : _threads) {
-    t.join();
-  }
-  myFile.close();
-}
-
-
