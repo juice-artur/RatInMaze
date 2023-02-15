@@ -32,7 +32,8 @@ bool SolveMaze(int Size, std::vector<std::vector<std::vector<int>>> Maze);
 
 void WriteToFile(std::ofstream &File, int Data);
 
-void CalculateRejections(int &NumberOfLaunches, const int Size,
+void CalculateRejections(std::atomic_unsigned_lock_free &NumberOfLaunches,
+                         const int Size,
                          std::ofstream &File);
 
 int main() {
@@ -44,7 +45,7 @@ int main() {
 
   const int Size = InputSize;
 
-  int NumberOfLaunches = 0;
+  std::atomic_unsigned_lock_free NumberOfLaunches{0};
 
   std::stringstream FileName("Maze");
 
@@ -66,10 +67,16 @@ int main() {
     t = std::thread(&CalculateRejections, std::ref(NumberOfLaunches), Size,
                     std::ref(File));
   }
-
+  auto Start = std::chrono::high_resolution_clock::now();
   for (auto &t : Theards) {
     t.join();
   }
+  auto Stop = std::chrono::high_resolution_clock::now();
+
+  auto Duration = duration_cast<std::chrono::microseconds>(Stop - Start);
+
+  std::cout << "Duration" << Duration.count() << std::endl;
+
   File.close();
 }
 
@@ -147,7 +154,8 @@ void WriteToFile(std::ofstream &File, int Data) {
   WriteMutex.unlock();
 }
 
-void CalculateRejections(int &NumberOfLaunches, const int Size,
+void CalculateRejections(std::atomic_unsigned_lock_free &NumberOfLaunches,
+                         const int Size,
                          std::ofstream &File) {
   while (NumberOfLaunches < 1000) {
     int NumberAttempts = 0;
@@ -188,8 +196,6 @@ void CalculateRejections(int &NumberOfLaunches, const int Size,
     }
 
     WriteToFile(File, NumberAttempts);
-    WriteMutex.lock();
-    NumberOfLaunches++;
-    WriteMutex.unlock();
+    NumberOfLaunches.fetch_add(1);
   }
 }
