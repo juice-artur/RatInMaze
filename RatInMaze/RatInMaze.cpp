@@ -9,7 +9,6 @@
 struct Point {
   int x;
   int y;
-  int z;
 };
 
 struct QueueNode {
@@ -19,16 +18,15 @@ struct QueueNode {
 
 const int RowNum[] = {-1, 0, 0, 1};
 const int ColumnNum[] = {0, -1, 1, 0};
-const int LayersNum[] = {1, 0, -1, 0};
 
 std::mutex WriteMutex;
 
-bool IsValid(int Row, int Column, int Layer, int Size);
+bool IsValid(int Row, int Column, int Size);
 
-int BFS(std::vector<std::vector<std::vector<int>>> Maze, Point Src, Point Dest,
+int BFS(std::vector<std::vector<int>> Maze, Point Src, Point Dest,
         int const size);
 
-bool SolveMaze(int Size, std::vector<std::vector<std::vector<int>>> Maze);
+bool SolveMaze(int Size, std::vector<std::vector<int>>  Maze);
 
 void WriteToFile(std::ofstream &File, int Data);
 
@@ -80,22 +78,20 @@ int main() {
   File.close();
 }
 
-bool IsValid(int Row, int Column, int Layer, int Size) {
-  return (Row >= 0) && (Row < Size) && (Column >= 0) && (Column < Size) &&
-         (Layer >= 0) && (Layer < Size);
+bool IsValid(int Row, int Column, int Size) {
+  return (Row >= 0) && (Row < Size) && (Column >= 0) && (Column < Size);
 }
 
-int BFS(std::vector<std::vector<std::vector<int>>> Maze, Point Src, Point Dest,
+int BFS(std::vector<std::vector<int>> Maze, Point Src, Point Dest,
         int const size) {
-  if (!Maze[Src.x][Src.y][Src.z] || !Maze[Dest.x][Dest.y][Dest.z]) return -1;
+  if (!Maze[Src.x][Src.y] || !Maze[Dest.x][Dest.y]) return -1;
 
-  std::vector<std::vector<std::vector<bool>>> Visited;
+  std::vector<std::vector<bool>> Visited;
   Visited.resize(size);
   for (int i = 0; i < size; i++) {
     Visited[i].resize(size);
-    for (int j = 0; j < size; j++) Visited[i][j].resize(size);
   }
-  Visited[Src.x][Src.y][Src.z] = true;
+  Visited[Src.x][Src.y] = true;
 
   std::queue<QueueNode> Queue;
 
@@ -106,18 +102,17 @@ int BFS(std::vector<std::vector<std::vector<int>>> Maze, Point Src, Point Dest,
     QueueNode Current = Queue.front();
     Point pt = Current.Point;
 
-    if (pt.x == Dest.x && pt.y == Dest.y && pt.z == Dest.z) return Current.Dist;
+    if (pt.x == Dest.x && pt.y == Dest.y ) return Current.Dist;
 
     Queue.pop();
 
     for (int i = 0; i < 4; i++) {
       int Row = pt.x + RowNum[i];
       int Column = pt.y + ColumnNum[i];
-      int Layer = pt.z + LayersNum[i];
-      if (IsValid(Row, Column, Layer, size) && Maze[Row][Column][Layer] &&
-          !Visited[Row][Column][Layer]) {
-        Visited[Row][Column][Layer] = true;
-        QueueNode Adjcell = {{Row, Column, Layer}, Current.Dist + 1};
+      if (IsValid(Row, Column, size) && Maze[Row][Column] &&
+          !Visited[Row][Column]) {
+        Visited[Row][Column] = true;
+        QueueNode Adjcell = {{Row, Column}, Current.Dist + 1};
         Queue.push(Adjcell);
       }
     }
@@ -126,14 +121,12 @@ int BFS(std::vector<std::vector<std::vector<int>>> Maze, Point Src, Point Dest,
   return -1;
 }
 
-bool SolveMaze(int Size, std::vector<std::vector<std::vector<int>>> Maze) {
+bool SolveMaze(int Size, std::vector<std::vector<int>> Maze) {
   std::vector<Point> Sources;
   std::vector<Point> Dests;
   for (int i = 0; i < Size; i++) {
-    for (int j = 0; j < Size; j++) {
-      Sources.push_back({0, i, j});
-      Dests.push_back({Size - 1, i, j});
-    }
+      Sources.push_back({0, i});
+    Dests.push_back({Size - 1, i});
   }
 
   for (auto i : Sources) {
@@ -157,22 +150,20 @@ void WriteToFile(std::ofstream &File, int Data) {
 void CalculateRejections(std::atomic_unsigned_lock_free &NumberOfLaunches,
                          const int Size,
                          std::ofstream &File) {
-  while (NumberOfLaunches < 1000) {
+  while (NumberOfLaunches.load() < 100) {
     int NumberAttempts = 0;
 
-    std::vector<std::vector<std::vector<int>>> Maze;
+    std::vector<std::vector<int>>  Maze;
     Maze.resize(Size);
 
     for (int i = 0; i < Size; i++) {
       Maze[i].resize(Size);
-      for (int j = 0; j < Size; j++) Maze[i][j].resize(Size);
     }
 
     for (size_t i = 0; i < Size; i++) {
       for (size_t j = 0; j < Size; j++) {
-        for (size_t k = 0; k < Size; k++) {
-          Maze[i][j][k] = 1;
-        }
+          Maze[i][j] = 1;
+        
       }
     }
 
@@ -183,15 +174,13 @@ void CalculateRejections(std::atomic_unsigned_lock_free &NumberOfLaunches,
 
       int i = 0;
       int j = 0;
-      int k = 0;
 
       do {
         i = Distribution(Gen);
         j = Distribution(Gen);
-        k = Distribution(Gen);
-      } while (Maze[i][j][k] != 1);
+      } while (Maze[i][j] != 1);
 
-      Maze[i][j][k] = 0;
+      Maze[i][j] = 0;
       NumberAttempts++;
     }
 
