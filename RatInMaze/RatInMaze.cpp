@@ -145,7 +145,7 @@ int main() {
 
   std::stringstream FileName("Maze");
 
-  FileName << "Maze" << InputSize << "x" << InputSize << "x" << InputSize
+  FileName << "Maze" << InputSize << "x" << InputSize << "x"
            << ".txt";
 
   std::ofstream File;
